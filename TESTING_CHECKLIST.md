@@ -5,9 +5,18 @@ through this in order. Each section maps to a checkpoint in the spec.
 
 Useful at any point:
 
+- `npm run check:behaviour` — 63 automated assertions over the whole server
+  side: normalisation, validation, search, ordering, the follow-ups filter, the
+  notes timeline, and a real conversion. It creates rows prefixed `ZZTEST`,
+  asserts against them, deletes them, and proves the row counts are back where
+  they started. **Currently 63 passed, 0 failed.**
 - `npm run check:tenancy` — read-only. Prints every organization with its
   enquiries, and a count of any enquiry belonging to no organization (must be 0).
 - `npx prisma studio` — click around the database directly.
+
+Steps marked **[auto]** are already covered by `check:behaviour` — run it once
+instead of doing them by hand. The unmarked steps need a browser and are the
+real work of this pass.
 
 ---
 
@@ -21,12 +30,14 @@ Useful at any point:
    not clickable. Dashboard is greyed too.
 4. Visit `/` directly — it should redirect to `/enquiries`.
 5. Visit `/setup` — should 404. That self-serve onboarding flow is gone.
-6. **No-access path.** Sign out, sign up with a *different* email that has no
-   `User` row. You should land on **/no-access** with a sign-out button, not on a
-   crash or an empty dashboard. Then sign back in as yourself.
+6. **No-access path.** `/no-access` rendering and `/setup` being gone are both
+   already confirmed by HTTP. What is left for you: sign out, sign up with a
+   *different* email that has no `User` row. You should land on **/no-access**
+   with a sign-out button, not on a crash or an empty dashboard. Then sign back
+   in as yourself.
    - If you have not yet set Clerk sign-ups to invitation-only, do that after
      this test, otherwise strangers can create orphan accounts.
-7. `npm run check:tenancy` — your `User` row shows a `clerkUserId`.
+7. **[auto]** `npm run check:tenancy` — your `User` row shows a `clerkUserId`.
 
 ---
 
@@ -39,7 +50,7 @@ Useful at any point:
 10. **Save and add another**: fill it in, click that button. The sheet stays
     open, fields clear, focus returns to Phone, and a green
     *"Saved <name>. Add the next one."* line appears. Add a third this way.
-11. **Phone normalisation.** Save one enquiry with the phone typed as
+11. **[auto]** **Phone normalisation.** Save one enquiry with the phone typed as
     `+91 98765 43210`. Check the list — it must display as `9876543210`.
 12. **Duplicate detection.** Open the sheet and type a number you already saved.
     After ~400ms an amber box appears above the form:
@@ -47,10 +58,10 @@ Useful at any point:
     the sheet closes and the enquiry opens.
 13. Try the same number in three formats — `9876543210`, `+91 98765 43210`,
     `098765 43210`. All three must raise the same duplicate warning.
-14. **Validation.** Try saving with a landline (`022 2222 3333`), a 5-digit
+14. **[auto]** **Validation.** Try saving with a landline (`022 2222 3333`), a 5-digit
     number, and a blank name. Each should show an inline field error and save
     nothing.
-15. `npm run check:tenancy` — every enquiry sits under **The Tulsi Academy** and
+15. **[auto]** `npm run check:tenancy` — every enquiry sits under **The Tulsi Academy** and
     the orphan count is 0.
 
 ---
@@ -60,7 +71,7 @@ Useful at any point:
 16. **Search.** Type a partial phone (e.g. the last 4 digits) in the search box.
     The list filters and the URL gains `?q=…`. Refresh the page — the filter and
     the box contents survive.
-17. Search a partial name, in lower case. It should match regardless of case.
+17. **[auto]** Search a partial name, in lower case. It should match regardless of case.
     Also search a name that **contains a digit** (e.g. `Test2`) — it must match
     that name only, not every enquiry whose phone happens to contain a 2.
     A term is treated as a phone search only when the whole term is a number.
@@ -71,10 +82,10 @@ Useful at any point:
 21. **Overdue is obvious.** On one enquiry set a follow-up date of *yesterday*
     and save. Back on the list it should have a red left bar and a tinted row,
     and sort above the others. The header should read "1 due for follow-up".
-22. **Follow-ups tab.** Set one enquiry to *today* and one to *next week*.
+22. **[auto]** **Follow-ups tab.** Set one enquiry to *today* and one to *next week*.
     Open **Follow-ups** — only yesterday's and today's appear, grouped Overdue
     and Today. Next week's must not be there.
-23. Set an enquiry to *yesterday* and mark it **Lost**. It should disappear from
+23. **[auto]** Set an enquiry to *yesterday* and mark it **Lost**. It should disappear from
     Follow-ups and lose its red styling in the list.
 24. If you have more than 25 enquiries, check the Previous/Next pager and that
     `?page=` survives a refresh.
@@ -87,7 +98,7 @@ Useful at any point:
     save. It appears in the **Notes** panel with your name and a timestamp.
     Write a second note and save — the first one must still be there, with the
     newest on top. Nothing is overwritten.
-26. The note you typed in the capture sheet when first creating an enquiry
+26. **[auto]** The note you typed in the capture sheet when first creating an enquiry
     should be the oldest entry in that enquiry's timeline.
 27. **Convert.** On an unconverted enquiry click **Convert to student**. The form
     pre-fills the student's first/last name from the enquiry, and the parent
@@ -98,19 +109,48 @@ Useful at any point:
     A timeline note records the conversion.
 29. Visit `/enquiries/<that id>/convert` directly — it should bounce you back to
     the enquiry rather than letting you convert twice.
-30. **Parent reuse.** Convert a second enquiry using the *same parent phone* as
+30. **[auto]** **Parent reuse.** Convert a second enquiry using the *same parent phone* as
     the first. In `npx prisma studio`, the `Parent` table must have **one** row
     for that number, with two students attached — not two parent rows.
-31. In Prisma Studio check the new rows:
+31. **[auto]** In Prisma Studio check the new rows:
     - `Student` — has the address and DOB you entered.
     - `Payment` — `type=REGISTRATION`, `status=PAID`, `studentId` set and
       `enquiryId` **null** (never both).
     - `Enquiry` — `status=ADMITTED` and `convertedStudentId` pointing at the
       student.
-32. Convert an enquiry **without** a registration fee — no `Payment` row should
+32. **[auto]** Convert an enquiry **without** a registration fee — no `Payment` row should
     be created at all.
 
 ---
+
+## Already verified for you
+
+Confirmed by `npm run check:behaviour` (63/63) and by HTTP requests against a
+running dev server:
+
+- Phone normalisation, all five formats, and every validation rejection.
+- Search: by name, by name containing a digit, case-insensitive, by partial
+  phone, by formatted phone, and terms too short to be a phone fragment.
+- Due-follow-ups-first ordering, the due count, and that an enquiry with no
+  follow-up date is still listed exactly once.
+- The follow-ups filter: overdue and today in; tomorrow, next week, lost and
+  admitted out.
+- Notes append rather than overwrite, newest first, with the author recorded.
+- A real conversion: parent reused on matching phone, student keeps address /
+  DOB / experience, the fee creates one `Payment` with `enquiryId` null, no fee
+  creates none, the enquiry closes as ADMITTED, and two enquiries cannot claim
+  one student.
+- Tenancy: the other organization sees nothing, and every row lands on the
+  right one.
+- Day boundaries resolve in Asia/Kolkata, asserted to be identical whether the
+  process runs on IST or UTC, so "Today"/"Overdue" and the Follow-ups cutoff
+  behave the same locally and on Vercel.
+- A registration fee of 0 is accepted and creates no Payment; a negative one is
+  rejected.
+- Rows sharing a created-at timestamp keep a stable order across queries, so
+  pagination cannot repeat or skip one.
+- Routes: `/` and `/enquiries` redirect to `/login` when signed out, `/setup`
+  and `/enquiries/new` are gone, `/no-access` renders.
 
 ## Known gaps (expected — not bugs)
 
